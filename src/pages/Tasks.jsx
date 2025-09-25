@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Trash2, Calendar, Tag, Search, Download } from "lucide-react"
-import { getTasks, createTask, toggleTask, deleteTask } from "../utils/api"
+import { getTasks, createTask, toggleTask, deleteTask, toggleReminder } from "../utils/api"
 
 const Tasks = () => {
   const [tasks, setTasks] = useState([])
@@ -47,7 +47,13 @@ const Tasks = () => {
   const handleToggle = async (taskId) => {
     try {
       const updatedTask = await toggleTask(taskId)
-      setTasks(tasks.map((task) => (task.id === taskId ? updatedTask : task)))
+      // the existing toggleTask might return the updated task or a success object
+      if (updatedTask && updatedTask.id) {
+        setTasks(tasks.map((task) => (task.id === taskId ? updatedTask : task)))
+      } else {
+        // fallback: optimistic toggle locally
+        setTasks(tasks.map((task) => (task.id === taskId ? { ...task, completed: !task.completed } : task)))
+      }
     } catch (error) {
       console.error("Failed to toggle task:", error)
     }
@@ -73,6 +79,23 @@ const Tasks = () => {
     URL.revokeObjectURL(url)
   }
 
+  const handleToggleReminder = async (taskId) => {
+    try {
+      const res = await toggleReminder(taskId)
+      // res could be { ok: true, reminder_enabled: boolean } or the updated task
+      if (res && typeof res.reminder_enabled !== "undefined") {
+        setTasks(tasks.map((t) => (t.id === taskId ? { ...t, reminder_enabled: res.reminder_enabled } : t)))
+      } else if (res && res.id) {
+        setTasks(tasks.map((t) => (t.id === taskId ? res : t)))
+      } else {
+        // fallback: refetch tasks
+        await loadTasks()
+      }
+    } catch (err) {
+      console.error("Failed to toggle reminder", err)
+    }
+  }
+
   const filteredTasks = tasks.filter((task) => {
     const searchLower = searchTerm.toLowerCase()
     return (
@@ -80,6 +103,15 @@ const Tasks = () => {
       (task.tags && task.tags.some((tag) => tag.toLowerCase().includes(searchLower)))
     )
   })
+
+  const formatDate = (d) => {
+    if (!d) return "—"
+    try {
+      return new Date(d).toLocaleString()
+    } catch {
+      return d
+    }
+  }
 
   if (loading) {
     return (
@@ -197,14 +229,44 @@ const Tasks = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Reminder info */}
+                  <div className="mt-3 flex items-center justify-between gap-4">
+                    <div className="text-sm text-gray-600">
+                      <div>
+                        <strong>Reminder:</strong> {task.reminder_enabled ? "ON" : "OFF"}
+                        {" "}
+                        {task.reminder_sent && <span className="ml-2 inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">Reminded</span>}
+                      </div>
+                      <div className="mt-1">
+                        <small>Last status: <span className="font-medium">{task.last_reminder_status || "—"}</span></small>
+                      </div>
+                      <div>
+                        <small>Last sent: <span className="font-medium">{formatDate(task.last_reminder_sent_at)}</span></small>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleToggleReminder(task.id)}
+                        className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
+                        title={task.reminder_enabled ? "Disable reminder" : "Enable reminder"}
+                      >
+                        {task.reminder_enabled ? "Disable" : "Enable"}
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(task.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors duration-200"
+                        title="Delete task"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                <button
-                  onClick={() => handleDelete(task.id)}
-                  className="text-gray-400 hover:text-red-600 transition-colors duration-200"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {/* Mobile delete button fallback (if layout collapses) */}
               </div>
             </div>
           ))
