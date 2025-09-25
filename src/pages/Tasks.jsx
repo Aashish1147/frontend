@@ -6,7 +6,14 @@ import { getTasks, createTask, toggleTask, deleteTask, toggleReminder } from "..
 
 const Tasks = () => {
   const [tasks, setTasks] = useState([])
-  const [newTask, setNewTask] = useState({ title: "", dueDate: "", tags: "" })
+  const [newTask, setNewTask] = useState({
+    title: "",
+    dueDate: "",
+    tags: "",
+    user_email: "",   // new
+    user_name: ""     // optional friendly name
+  })
+
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
 
@@ -30,15 +37,26 @@ const Tasks = () => {
     if (!newTask.title.trim()) return
 
     try {
+      if (newTask.user_email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(newTask.user_email)) {
+          // show some UI error message, or:
+          return alert("Please enter a valid email address");
+        }
+      }
+      
       const taskData = {
         title: newTask.title,
+        description: newTask.description || "",   // if you have a description field
         dueDate: newTask.dueDate || null,
         tags: newTask.tags ? newTask.tags.split(",").map((tag) => tag.trim()) : [],
+        user_email: newTask.user_email ? newTask.user_email.trim() : null,
+        user_name: newTask.user_name ? newTask.user_name.trim() : "",
       }
 
       const createdTask = await createTask(taskData)
       setTasks([...tasks, createdTask])
-      setNewTask({ title: "", dueDate: "", tags: "" })
+      setNewTask({ title: "", dueDate: "", tags: "", user_email: "", user_name: "" })
     } catch (error) {
       console.error("Failed to create task:", error)
     }
@@ -176,6 +194,27 @@ const Tasks = () => {
                 value={newTask.tags}
                 onChange={(e) => setNewTask({ ...newTask, tags: e.target.value })}
                 className="input-field pl-10"
+              />
+            </div>
+
+            <div>
+              <input
+                type="text"
+                placeholder="Your name (optional)"
+                value={newTask.user_name}
+                onChange={(e) => setNewTask({ ...newTask, user_name: e.target.value })}
+                className="input-field"
+              />
+            </div>
+
+            {/* User email */}
+            <div>
+              <input
+                type="email"
+                placeholder="Your email (optional)"
+                value={newTask.user_email}
+                onChange={(e) => setNewTask({ ...newTask, user_email: e.target.value })}
+                className="input-field"
               />
             </div>
           </div>
